@@ -1,0 +1,15 @@
+def equal(A, B):
+    if len(A)!=len(B):
+        return False
+    for i in range(len(A)):
+        if A[i]!=B[i]:
+            return False
+    return True
+
+S = "abacadabadabacabafabacadabadabacabafabacadabadabacabafabacadabadabacaba"
+sub = 'dabac'
+def search_substring(S, sub):
+    for i in range(0, len(S)-len(sub)):
+        if equal(S[i:i+len(sub)], sub):
+            print(i)
+search_substring(S, sub)
