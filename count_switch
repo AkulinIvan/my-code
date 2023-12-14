@@ -1,0 +1,204 @@
+#!/usr/bin/python3
+#22/06/2017 17:17
+import telnetlib
+import time
+import os
+import sys
+import getpass
+import pexpect
+from telnetlib import Telnet
+import datetime
+import subprocess
+def who_is(): # проверяем точно ли тот вендор, который мы предположили на начальном этапе.
+    global ver_status
+    global sab_versus
+    global versus
+    sab_versus=''
+    ver_status=''
+    versus=''
+    a = 'Serial No.:1405'  # #qtech rev1
+    #b = 'Serial No.:3922'  # #qtech rev2
+    #c = 'Serial No.:5436'  # #qtech rev2
+    #l = 'Serial No.:16101' # #qtech rev2
+    d = 'Command: show switch'  # #d-link
+    f = 'Raisecom Operating System Software'  # #raisecom
+    h = 'QOS'  # #raisecom-qtech
+    j = 'MES1124M'  # #eltex
+    k = 'eltex'  # #eltex
+    n = 'Build245' #qtech2.0
+    parser=open('servers_&_log/ver.txt', 'r')
+    for line in parser.readlines():
+        line1 = line.find(a)
+        #line2 = line.find(b)
+        #line3 = line.find(c)
+        line4 = line.find(d)
+        line5 = line.find(f)
+        line6 = line.find(h)
+        line7 = line.find(j)
+        line8 = line.find(k)
+        #line9 = line.find(l)
+        line10 = line.find(n)
+        if line1 != -1:
+            ver_status='qtech_rev_1.0'
+        #if line2 != -1 or line3 != -1 or line9 !=-1:
+            #ver_status='qtech_rev_2.0'
+        if line4 != -1:
+            ver_status='d-link'
+        if line5 != -1:
+            ver_status='raisecom'
+        if line6 != -1:
+            ver_status='raisecom-qtech'
+            sab_versus=1
+        if line7 !=-1:
+            ver_status='eltex'
+        if line8 !=-1:
+            ver_status='eltex'
+        if line10 != -1:
+            ver_status = 'qtech_rev_2.0'
+        time.sleep(0.1)
+    parser.close()
+    os.remove('servers_&_log/ver.txt')
+    return ver_status,sab_versus
+user='Manage'
+password=',fhf,firf'
+komm=open('servers_&_log/komm.txt')
+log=open('servers_&_log/log.txt','a')
+counter_komm=0
+counter_dlink=0
+counter_qtech=0
+counter_eltex=0
+counter_raisecom=0
+counter_ROS=0     #гибрид
+counter_qtech1_0=0
+counter_qtech2_0=0
+for host in komm.readlines():
+    print('connect....',host)
+    vend = ''
+    #tn = Telnet(host.replace('\n', ''), 23, 20)
+    response = os.system('ping -c 1 ' + host)
+    verinfo = open('servers_&_log/ver.txt', 'w')
+    ver_status = ''
+    sab_versus = ''
+    if response == 0:
+        telnet = pexpect.spawn('telnet ' + host,timeout=40)
+        vend = telnet.expect(['login:', 'Login:', 'User Name:', 'Username'])
+        telnet.close()
+        tn = Telnet(host.replace('\n', ''), 23,30)
+        try:
+            print('Ok'+'\n')
+            tn.read_until(b':')
+            tn.write((user +'\n').encode('ascii'))
+            tn.read_until(b':')
+            tn.write((password + '\n').encode('ascii'))
+            time.sleep(3)
+            tn.read_until(b'#',timeout=20)
+        except:
+            print('connection refused' + '\n')
+            f = open('servers_&_log/log.txt', 'a')
+            print(host, 'connection refused', file=log)
+            print('#' * 100, host, file=log)
+###БЛОК ОПРЕДЕЛЕНИЯ ВЕНДОРА
+################################################################################
+        if vend == 0:# предположительно что это Qtech
+            tn.write(('show ver' + '\n').encode('ascii'))
+            print((tn.read_until(b'#').decode('ascii')), file=verinfo)
+            verinfo.close()
+            who_is()
+################################################################################
+        if vend == 1: #предположительно что это Raisecom,Raisecom-Qtech
+            tn.write(('show ver' + '\n').encode('ascii'))
+            print((tn.read_until(b'#').decode('ascii')), file=verinfo)
+            verinfo.close()
+            who_is()
+################################################################################
+        if vend == 2:#предположительно что это Eltex
+            tn.write(('show system' + '\n').encode('ascii'))
+            tn.write(('show ver' + '\n').encode('ascii'))
+            print((tn.read_until(b'#').decode('ascii')), file=verinfo)
+            verinfo.close()
+            who_is()
+################################################################################
+        if vend == 3:#предположительно что это D-link
+            tn.write(('show sw' + '\n').encode('ascii'))
+            tn.write(('a' + '\n').encode('ascii'))
+            print((tn.read_until(b'#').decode('ascii')), file=verinfo)
+            verinfo.close()
+            who_is()
+#
+###БЛОГ КОНФИГУРИРОВАНИЯ
+#
+################################################################################
+        if ver_status == 'd-link':
+            tn.read_until(b'#', timeout=20)
+            tn.write(('show sw' + '\n').encode('ascii'))
+            tn.write(('a' + '\n').encode('ascii'))
+            print((tn.read_until(b'#').decode('ascii')), file=log)
+            print('D-link ' + host,file=log)
+            print('#'*100,file=log)
+            counter_dlink+=1
+################################################################################
+        elif ver_status == 'qtech_rev_1.0':
+            tn.write(('show ver' + '\n').encode('ascii'))
+            print((tn.read_until(b'#').decode('ascii')), file=log)
+            counter_qtech1_0+=1
+            komand_qtech1_0=open('servers_&_log/komand_qtech_ver1.0.txt')
+            for kommand in komand_qtech1_0.readlines():
+                tn.write((kommand.replace('\n', '') + '\n').encode('ascii'))
+                #print((tn.read_until(b'#').decode('ascii')), file=log)
+            tn.write(('exit' + '\n').encode('ascii'))
+            print(tn.read_all().decode('ascii'), file=log)
+            print('Qtech rev1.0 ' + host, file=log)
+            print('#' * 100, file=log)
+################################################################################
+        elif ver_status == 'qtech_rev_2.0':
+            tn.write(('show ver' + '\n').encode('ascii'))
+            print((tn.read_until(b'#').decode('ascii')), file=log)
+            counter_qtech2_0+=1
+            komand_qtech2_0=open('servers_&_log/komand_qtech_ver2.0.txt')
+            for kommand in komand_qtech2_0.readlines():
+                tn.write((kommand.replace('\n', '') + '\n').encode('ascii'))
+                print((tn.read_until(b'#').decode('ascii')), file=log)
+                time.sleep(1)
+            print('Qtech rev2.0 ' + host, file=log)
+            print('#' * 100, file=log)
+################################################################################
+        elif ver_status == 'raisecom-qtech':
+            tn.write(('show ver' + '\n').encode('ascii'))
+            print((tn.read_until(b'#').decode('ascii')), file=log)
+            raisecom_command = open('servers_&_log/komand_raisecom.txt')
+            for komand in raisecom_command.readlines():
+                tn.write((komand.replace('\n', '') + '\n').encode('ascii'))
+                print((tn.read_until(b'#').decode('ascii')), file=log)
+            print('ROS '+ host,file=log)
+            print('#'*100,file=log)
+            counter_ROS+=1
+################################################################################
+        elif ver_status == 'raisecom':
+            tn.write(('show ver' + '\n').encode('ascii'))
+            print((tn.read_until(b'#').decode('ascii')), file=log)
+            counter_raisecom+=1
+            raisecom_command = open('servers_&_log/komand_raisecom.txt')
+            for komand in raisecom_command.readlines():
+                tn.write((komand.replace('\n', '') + '\n').encode('ascii'))
+                print((tn.read_until(b'#').decode('ascii')), file=log)
+            print(host, ':', 'RAISECOM', file=log)
+            print('#' * 100, host, file=log)
+################################################################################
+        elif ver_status == 'eltex':
+            tn.write(('show ver' + '\n').encode('ascii'))
+            print((tn.read_until(b'#').decode('ascii')), file=log)
+            eltex_command=open('servers_&_log/komand_eltex.txt')
+            for komand in eltex_command.readlines():
+                tn.write((komand.replace('\n', '') + '\n').encode('ascii'))
+                print((tn.read_until(b'#').decode('ascii')), file=log)
+            print('Eltex ' + host, file=log)
+            print('#' * 100, file=log)
+            counter_eltex+=1
+    else:
+        print('no ping')
+    counter_komm+=1
+print('\n\n\nИтого обработано: ', counter_komm,file=log)
+print('\n\nD-link:', counter_dlink,'\nQtech ver1.0:', counter_qtech1_0,'\nROS:', counter_ROS,'\nRaisecom:',counter_raisecom,'\nEltex:', counter_eltex,'\nQtech ver2.0 :', counter_qtech2_0,file=log)
+print('\nДата: ', datetime.datetime.now().isoformat(),'\n', '#'*100,'\n\n\n\n\n',file=log)
+verinfo.close()
+log.close()
